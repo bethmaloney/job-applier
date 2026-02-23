@@ -34,6 +34,8 @@ Rate relevance from 1-10 where:
 - 8-9: Strong match (closely aligned with profile)
 - 10: Perfect match
 
+Important: If salary is not listed, treat it as neutral — do NOT assume it is below the candidate's minimum or penalize the score. Only flag salary as a concern if a specific salary is stated and it is clearly below the minimum.
+
 Respond with ONLY valid JSON, no other text:
 {{"score": <number 1-10>, "explanation": "<one sentence>"}}
 """

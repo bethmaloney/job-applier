@@ -187,6 +187,42 @@ def get_unranked_jobs(conn):
     """).fetchall()
 
 
+def get_jobs_for_refresh(conn, source=None):
+    """Get all non-dismissed jobs for description refresh, optionally filtered by source."""
+    query = """
+        SELECT j.id, j.source, j.external_id, j.url, j.description, j.salary
+        FROM jobs j
+        JOIN job_status js ON j.id = js.job_id
+        WHERE js.dismissed = 0
+    """
+    params = []
+    if source:
+        query += " AND j.source = ?"
+        params.append(source)
+    return conn.execute(query, params).fetchall()
+
+
+def update_job_detail(conn, job_id, description, salary=None):
+    """Update a job's description (and optionally salary), then clear its ranking."""
+    if salary:
+        conn.execute(
+            "UPDATE jobs SET description = ?, salary = ? WHERE id = ?",
+            (description, salary, job_id),
+        )
+    else:
+        conn.execute(
+            "UPDATE jobs SET description = ? WHERE id = ?",
+            (description, job_id),
+        )
+    conn.execute(
+        """UPDATE job_status
+           SET relevance_score = NULL, relevance_explanation = NULL, updated_at = datetime('now')
+           WHERE job_id = ?""",
+        (job_id,),
+    )
+    conn.commit()
+
+
 def get_dashboard_stats(conn):
     """Get counts for the stats bar."""
     row = conn.execute("""

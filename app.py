@@ -162,6 +162,38 @@ def rank_jobs():
     return redirect(url_for("dashboard"))
 
 
+@app.route("/refresh", methods=["POST"])
+def refresh_jobs():
+    """Re-fetch Seek job details and re-rank them."""
+    global _fetch_status
+    if _fetch_status["running"]:
+        flash("A fetch/rank is already running.", "warning")
+        return redirect(url_for("dashboard"))
+
+    def _run_refresh():
+        try:
+            _fetch_status["message"] = "Re-fetching job details..."
+            updated, errors = scraper.refresh_job_details()
+            _fetch_status["message"] = f"Updated {updated} jobs. Ranking..."
+            ranked = ranker.rank_new_jobs()
+            _fetch_status["message"] = f"Done! {updated} descriptions updated, {ranked} jobs ranked."
+        except Exception as e:
+            logging.error(f"Refresh error: {e}")
+            _fetch_status["message"] = f"Error: {e}"
+        finally:
+            _fetch_status["running"] = False
+
+    with _fetch_lock:
+        _fetch_status["running"] = True
+        _fetch_status["message"] = "Starting refresh..."
+
+    thread = threading.Thread(target=_run_refresh, daemon=True)
+    thread.start()
+
+    flash("Refreshing job details in the background... this will take a while.", "info")
+    return redirect(url_for("dashboard"))
+
+
 @app.route("/fetch/status")
 def fetch_status():
     return jsonify(_fetch_status)

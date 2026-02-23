@@ -180,6 +180,98 @@ def _seek_get(url, session):
     return resp
 
 
+def _fetch_seek_detail(job_url, session):
+    """Fetch a Seek job detail page and extract full description + salary."""
+    try:
+        resp = _seek_get(job_url, session)
+    except Exception as e:
+        logger.warning(f"Failed to fetch Seek detail {job_url}: {e}")
+        return "", ""
+
+    soup = BeautifulSoup(resp.text, "lxml")
+
+    description = ""
+    salary = ""
+
+    # Try JSON-LD structured data first (most reliable)
+    for script in soup.find_all("script", type="application/ld+json"):
+        try:
+            ld = json.loads(script.string or "")
+            if isinstance(ld, list):
+                ld = next((x for x in ld if x.get("@type") == "JobPosting"), None)
+            if ld and ld.get("@type") == "JobPosting":
+                raw = ld.get("description", "")
+                if raw:
+                    # Strip HTML tags from the description
+                    desc_soup = BeautifulSoup(raw, "lxml")
+                    description = desc_soup.get_text("\n", strip=True)
+                base_salary = ld.get("baseSalary") or {}
+                if isinstance(base_salary, dict):
+                    value = base_salary.get("value") or {}
+                    if isinstance(value, dict):
+                        min_val = value.get("minValue", "")
+                        max_val = value.get("maxValue", "")
+                        if min_val and max_val:
+                            salary = f"${min_val} - ${max_val}"
+                        elif min_val:
+                            salary = f"${min_val}"
+                break
+        except (json.JSONDecodeError, TypeError):
+            continue
+
+    # Fallback: try embedded JSON (Seek's React data)
+    if not description:
+        for script in soup.find_all("script", type="application/json"):
+            try:
+                data = json.loads(script.string or "")
+                desc = _find_description_in_data(data)
+                if desc:
+                    description = desc
+                    break
+            except (json.JSONDecodeError, TypeError):
+                continue
+
+    # Fallback: try HTML selectors
+    if not description:
+        for selector in [
+            '[data-automation="jobAdDetails"]',
+            '[data-automation="jobDescription"]',
+            'div[class*="jobAdDetails"]',
+            'div[class*="job-description"]',
+        ]:
+            el = soup.select_one(selector)
+            if el:
+                description = el.get_text("\n", strip=True)
+                break
+
+    return description, salary
+
+
+def _find_description_in_data(data, depth=0):
+    """Recursively search JSON for a job description field."""
+    if depth > 12:
+        return ""
+    if isinstance(data, dict):
+        # Look for description-like keys with substantial text
+        for key in ("description", "content", "jobDetail", "jobDescription"):
+            val = data.get(key)
+            if isinstance(val, str) and len(val) > 100:
+                # Strip HTML if present
+                if "<" in val:
+                    return BeautifulSoup(val, "lxml").get_text("\n", strip=True)
+                return val
+        for val in data.values():
+            result = _find_description_in_data(val, depth + 1)
+            if result:
+                return result
+    elif isinstance(data, list):
+        for item in data:
+            result = _find_description_in_data(item, depth + 1)
+            if result:
+                return result
+    return ""
+
+
 def scrape_seek():
     """Scrape all configured Seek search URLs."""
     all_jobs = []
@@ -206,7 +298,60 @@ def scrape_seek():
             logger.error(msg)
             errors.append(msg)
 
+    # Fetch full detail pages for each job (like LinkedIn scraper does)
+    logger.info(f"Fetching detail pages for {len(all_jobs)} Seek jobs")
+    for job in all_jobs:
+        detail_url = job.get("url")
+        if not detail_url:
+            continue
+        description, detail_salary = _fetch_seek_detail(detail_url, session)
+        if description:
+            job["description"] = description
+        if detail_salary and not job.get("salary"):
+            job["salary"] = detail_salary
+        _polite_delay()
+
     return all_jobs, errors
+
+
+def refresh_job_details():
+    """Re-fetch detail pages for existing Seek and LinkedIn jobs and update descriptions."""
+    conn = database.get_db()
+    jobs = database.get_jobs_for_refresh(conn)
+    seek_session = cffi_requests.Session(impersonate="chrome")
+    linkedin_session = requests.Session()
+
+    updated = 0
+    errors = []
+    logger.info(f"Refreshing details for {len(jobs)} jobs")
+
+    for job in jobs:
+        job = dict(job)
+        detail_url = job.get("url")
+        if not detail_url:
+            continue
+        try:
+            source = job.get("source")
+            if source == "seek":
+                description, detail_salary = _fetch_seek_detail(detail_url, seek_session)
+            elif source == "linkedin":
+                description, detail_salary = _fetch_linkedin_detail(detail_url, linkedin_session)
+            else:
+                continue
+
+            if description and description != (job.get("description") or ""):
+                salary = detail_salary if detail_salary and not job.get("salary") else None
+                database.update_job_detail(conn, job["id"], description, salary)
+                updated += 1
+                logger.info(f"Updated description for {source} job {job['id']}")
+            _polite_delay()
+        except Exception as e:
+            msg = f"Refresh error ({job.get('source')} job {job['id']}): {e}"
+            logger.error(msg)
+            errors.append(msg)
+
+    conn.close()
+    return updated, errors
 
 
 # --- LinkedIn scraper ---
@@ -269,6 +414,35 @@ def _parse_linkedin_cards(html):
     return jobs
 
 
+def _fetch_linkedin_detail(job_url, session):
+    """Fetch a LinkedIn job detail page and extract description + salary."""
+    try:
+        resp = session.get(job_url, headers=SESSION_HEADERS, timeout=config.REQUEST_TIMEOUT)
+        resp.raise_for_status()
+    except Exception as e:
+        logger.warning(f"Failed to fetch LinkedIn detail {job_url}: {e}")
+        return "", ""
+
+    soup = BeautifulSoup(resp.text, "lxml")
+
+    # Extract full description
+    desc_el = soup.find("div", class_="show-more-less-html__markup")
+    description = desc_el.get_text("\n", strip=True) if desc_el else ""
+
+    # Try to extract salary from the description text using common patterns
+    salary = ""
+    if description:
+        salary_pattern = re.search(
+            r'\$[\d,]+(?:\.[\d]+)?(?:k)?\s*[-–]\s*\$[\d,]+(?:\.[\d]+)?(?:k)?'
+            r'(?:\s*(?:\+\s*super(?:annuation)?|per\s+(?:annum|year)|p\.?a\.?|pa|base))?',
+            description, re.IGNORECASE
+        )
+        if salary_pattern:
+            salary = salary_pattern.group(0)
+
+    return description, salary
+
+
 def scrape_linkedin():
     """Scrape LinkedIn guest job search API."""
     all_jobs = []
@@ -306,6 +480,19 @@ def scrape_linkedin():
                 logger.error(msg)
                 errors.append(msg)
                 break
+
+    # Fetch full detail pages for each job
+    logger.info(f"Fetching detail pages for {len(all_jobs)} LinkedIn jobs")
+    for job in all_jobs:
+        detail_url = job["url"]
+        if not detail_url:
+            continue
+        description, detail_salary = _fetch_linkedin_detail(detail_url, session)
+        if description:
+            job["description"] = description
+        if detail_salary and not job.get("salary"):
+            job["salary"] = detail_salary
+        _polite_delay()
 
     return all_jobs, errors
 
