@@ -32,6 +32,19 @@ def _get(url, session=None):
     return resp
 
 
+_SALARY_PLACEHOLDERS = [
+    "add expected salary",
+]
+
+
+def _is_salary_placeholder(salary):
+    """Return True if the salary string is a Seek placeholder, not a real value."""
+    if not salary:
+        return False
+    lower = salary.strip().lower()
+    return any(lower.startswith(p) for p in _SALARY_PLACEHOLDERS)
+
+
 # --- Seek scraper ---
 
 def _parse_seek_json(soup):
@@ -94,6 +107,8 @@ def _normalize_seek_json_job(data):
         salary = data.get("salary", "") or data.get("salaryLabel", "") or ""
         if isinstance(salary, dict):
             salary = salary.get("label", "")
+        if _is_salary_placeholder(salary):
+            salary = ""
 
         listing_date = data.get("listingDate") or data.get("listedAt") or ""
         if isinstance(listing_date, dict):
@@ -128,28 +143,47 @@ def _parse_seek_html(soup):
 
     for card in cards:
         try:
-            link = card.find("a", href=re.compile(r"/job/\d+"))
-            if not link:
-                continue
+            # Extract job ID from data attribute or link href
+            external_id = card.get("data-job-id", "")
+            if not external_id:
+                link = card.find("a", href=re.compile(r"/job/\d+"))
+                if not link:
+                    continue
+                match = re.search(r"/job/(\d+)", link.get("href", ""))
+                if not match:
+                    continue
+                external_id = match.group(1)
 
-            href = link.get("href", "")
-            match = re.search(r"/job/(\d+)", href)
-            if not match:
-                continue
+            # Title: prefer data-automation="jobTitle", fall back to h3, then aria-label
+            title_el = (
+                card.select_one('[data-automation="jobTitle"]')
+                or card.select_one('[data-testid="job-card-title"]')
+                or card.find("h3")
+            )
+            title = title_el.get_text(strip=True) if title_el else card.get("aria-label", "")
 
-            external_id = match.group(1)
-            title = link.get_text(strip=True)
-
-            company_el = card.select_one('[data-testid="company-name"]') or card.find("a", {"data-type": "company"})
+            company_el = (
+                card.select_one('[data-automation="jobCompany"]')
+                or card.select_one('[data-testid="company-name"]')
+            )
             company = company_el.get_text(strip=True) if company_el else ""
 
-            location_el = card.select_one('[data-testid="job-location"]') or card.find("a", {"data-type": "location"})
+            location_el = (
+                card.select_one('[data-automation="jobCardLocation"]')
+                or card.select_one('[data-automation="jobLocation"]')
+                or card.select_one('[data-testid="job-location"]')
+            )
             location = location_el.get_text(strip=True) if location_el else ""
 
-            salary_el = card.select_one('[data-testid="job-salary"]')
+            salary_el = card.select_one('[data-automation*="salary"]') or card.select_one('[data-testid="job-salary"]')
             salary = salary_el.get_text(strip=True) if salary_el else ""
+            if _is_salary_placeholder(salary):
+                salary = ""
 
-            teaser_el = card.select_one('[data-testid="job-teaser"]') or card.find("span", class_=re.compile("teaser"))
+            teaser_el = (
+                card.select_one('[data-automation="jobShortDescription"]')
+                or card.select_one('[data-testid="job-card-teaser"]')
+            )
             teaser = teaser_el.get_text(strip=True) if teaser_el else ""
 
             date_el = card.select_one("time") or card.select_one('[data-testid="listing-date"]')
@@ -224,6 +258,8 @@ def _fetch_seek_detail(job_url, session):
         sal_el = soup.select_one('[data-automation*="salary"]')
         if sal_el:
             salary = sal_el.get_text(strip=True)
+    if _is_salary_placeholder(salary):
+        salary = ""
 
     # Fallback: try embedded JSON (Seek's React data)
     if not description:

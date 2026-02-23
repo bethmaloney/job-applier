@@ -66,6 +66,10 @@ def init_db():
         conn.execute("ALTER TABLE user_profile ADD COLUMN location TEXT")
         conn.commit()
 
+    # Clean up Seek salary placeholders stored in earlier scrapes
+    conn.execute(
+        "UPDATE jobs SET salary = '' WHERE lower(salary) LIKE 'add expected salary%'"
+    )
     conn.commit()
     conn.close()
 
