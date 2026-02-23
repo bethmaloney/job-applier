@@ -219,6 +219,12 @@ def _fetch_seek_detail(job_url, session):
         except (json.JSONDecodeError, TypeError):
             continue
 
+    # Fallback: salary from page element if JSON-LD didn't have it
+    if not salary:
+        sal_el = soup.select_one('[data-automation*="salary"]')
+        if sal_el:
+            salary = sal_el.get_text(strip=True)
+
     # Fallback: try embedded JSON (Seek's React data)
     if not description:
         for script in soup.find_all("script", type="application/json"):
