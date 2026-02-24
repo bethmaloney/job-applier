@@ -42,15 +42,20 @@ def dashboard():
     conn = database.get_db()
     source_filter = request.args.get("source")
     sort_by = request.args.get("sort", "relevance")
+    limit = request.args.get("limit", 25, type=int)
     jobs = database.get_new_jobs(conn, source_filter=source_filter, sort_by=sort_by)
     stats = database.get_dashboard_stats(conn)
     conn.close()
+    has_more = len(jobs) > limit
+    jobs = jobs[:limit]
     return render_template(
         "dashboard.html",
         jobs=jobs,
         stats=stats,
         source_filter=source_filter,
         sort_by=sort_by,
+        limit=limit,
+        has_more=has_more,
     )
 
 

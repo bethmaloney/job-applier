@@ -191,18 +191,30 @@ def get_unranked_jobs(conn):
     """).fetchall()
 
 
-def get_jobs_for_refresh(conn, source=None):
-    """Get all non-dismissed jobs for description refresh, optionally filtered by source."""
+def get_jobs_for_refresh(conn, source=None, limit=50):
+    """Get non-dismissed jobs that are missing a description or unranked, newest first."""
     query = """
         SELECT j.id, j.source, j.external_id, j.url, j.description, j.salary
         FROM jobs j
         JOIN job_status js ON j.id = js.job_id
         WHERE js.dismissed = 0
+          AND (j.description IS NULL OR j.description = '' OR j.relevance_score IS NULL)
+        ORDER BY j.date_scraped DESC
+        LIMIT ?
     """
-    params = []
+    params = [limit]
     if source:
-        query += " AND j.source = ?"
-        params.append(source)
+        query = """
+            SELECT j.id, j.source, j.external_id, j.url, j.description, j.salary
+            FROM jobs j
+            JOIN job_status js ON j.id = js.job_id
+            WHERE js.dismissed = 0
+              AND (j.description IS NULL OR j.description = '' OR j.relevance_score IS NULL)
+              AND j.source = ?
+            ORDER BY j.date_scraped DESC
+            LIMIT ?
+        """
+        params = [source, limit]
     return conn.execute(query, params).fetchall()
 
 
