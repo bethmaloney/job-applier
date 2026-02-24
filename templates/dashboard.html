@@ -109,14 +109,6 @@
             </div>
 
             <div class="flex flex-col gap-1.5 flex-shrink-0">
-                <a href="{{ job.url }}" target="_blank" rel="noopener"
-                   class="px-2.5 py-1 text-xs font-medium rounded bg-indigo-50 text-indigo-700 hover:bg-indigo-100 text-center">
-                    Open
-                </a>
-                <button onclick="jobAction('/jobs/{{ job.id }}/seen', this)"
-                        class="px-2.5 py-1 text-xs font-medium rounded bg-gray-50 text-gray-600 hover:bg-gray-100">
-                    Seen
-                </button>
                 <button onclick="jobAction('/jobs/{{ job.id }}/dismiss', this)"
                         class="px-2.5 py-1 text-xs font-medium rounded bg-gray-50 text-gray-600 hover:bg-red-50 hover:text-red-600">
                     Dismiss

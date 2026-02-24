@@ -69,12 +69,6 @@
                                 class="px-2 py-0.5 text-xs rounded bg-purple-50 text-purple-700 hover:bg-purple-100">
                             CL
                         </button>
-                        {% if not job.dismissed %}
-                        <button onclick="jobAction('/jobs/{{ job.id }}/dismiss', this)"
-                                class="px-2 py-0.5 text-xs rounded bg-gray-50 text-gray-500 hover:bg-red-50 hover:text-red-600">
-                            Dismiss
-                        </button>
-                        {% endif %}
                         {% if not job.applied %}
                         <button onclick="jobAction('/jobs/{{ job.id }}/applied', this)"
                                 class="px-2 py-0.5 text-xs rounded bg-green-50 text-green-600 hover:bg-green-100">
