@@ -121,6 +121,10 @@
                         class="px-2.5 py-1 text-xs font-medium rounded bg-gray-50 text-gray-600 hover:bg-red-50 hover:text-red-600">
                     Dismiss
                 </button>
+                <button onclick='openCoverLetterModal({{ job.id }}, {{ job.title|tojson }}, {{ job.company|tojson }})'
+                        class="px-2.5 py-1 text-xs font-medium rounded bg-purple-50 text-purple-700 hover:bg-purple-100">
+                    Cover Letter
+                </button>
                 <button onclick="jobAction('/jobs/{{ job.id }}/applied', this)"
                         class="px-2.5 py-1 text-xs font-medium rounded bg-green-50 text-green-700 hover:bg-green-100">
                     Applied

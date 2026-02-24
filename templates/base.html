@@ -233,6 +233,126 @@
             poll();
         })();
     </script>
+    <!-- Cover Letter Modal -->
+    <div id="cl-modal" class="hidden fixed inset-0 z-50 overflow-y-auto">
+        <div class="flex items-center justify-center min-h-screen px-4">
+            <div class="fixed inset-0 bg-black bg-opacity-40 z-40" onclick="closeCoverLetterModal()"></div>
+            <div class="relative z-50 bg-white rounded-lg shadow-xl max-w-2xl w-full p-6">
+                <div class="flex items-center justify-between mb-4">
+                    <div>
+                        <h3 id="cl-job-title" class="text-lg font-semibold text-gray-900"></h3>
+                        <p id="cl-job-company" class="text-sm text-gray-500"></p>
+                    </div>
+                    <button onclick="closeCoverLetterModal()" class="text-gray-400 hover:text-gray-600 text-xl leading-none">&times;</button>
+                </div>
+
+                <div class="flex items-center gap-3 mb-4">
+                    <label for="cl-tone" class="text-sm font-medium text-gray-700">Tone:</label>
+                    <select id="cl-tone" class="rounded-md border-gray-300 shadow-sm text-sm px-3 py-1.5 border focus:ring-indigo-500 focus:border-indigo-500">
+                        <option value="professional">Professional</option>
+                        <option value="friendly">Friendly</option>
+                        <option value="enthusiastic">Enthusiastic</option>
+                        <option value="concise">Concise</option>
+                    </select>
+                    <button id="cl-generate-btn" onclick="generateCoverLetter()"
+                            class="px-4 py-1.5 text-sm font-medium rounded-md text-white bg-indigo-600 hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-indigo-500">
+                        Generate
+                    </button>
+                </div>
+
+                <div id="cl-error" class="hidden mb-3 rounded-md bg-red-50 p-3 text-sm text-red-700"></div>
+
+                <textarea id="cl-output" rows="14" readonly
+                          class="w-full rounded-md border-gray-300 shadow-sm text-sm p-3 border bg-gray-50 focus:ring-indigo-500 focus:border-indigo-500"
+                          placeholder="Click Generate to create a cover letter..."></textarea>
+
+                <div class="flex items-center justify-end gap-3 mt-4">
+                    <button id="cl-copy-btn" onclick="copyCoverLetter()"
+                            class="hidden px-4 py-1.5 text-sm font-medium rounded-md text-indigo-700 bg-indigo-50 hover:bg-indigo-100 focus:outline-none focus:ring-2 focus:ring-indigo-500">
+                        Copy to Clipboard
+                    </button>
+                    <button onclick="closeCoverLetterModal()"
+                            class="px-4 py-1.5 text-sm font-medium rounded-md text-gray-600 bg-gray-100 hover:bg-gray-200">
+                        Close
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        let _clJobId = null;
+
+        function openCoverLetterModal(jobId, title, company) {
+            _clJobId = jobId;
+            document.getElementById('cl-job-title').textContent = title;
+            document.getElementById('cl-job-company').textContent = company;
+            document.getElementById('cl-output').value = '';
+            document.getElementById('cl-error').classList.add('hidden');
+            document.getElementById('cl-copy-btn').classList.add('hidden');
+            document.getElementById('cl-generate-btn').disabled = false;
+            document.getElementById('cl-generate-btn').textContent = 'Generate';
+            document.getElementById('cl-tone').value = 'professional';
+            document.getElementById('cl-modal').classList.remove('hidden');
+        }
+
+        function closeCoverLetterModal() {
+            document.getElementById('cl-modal').classList.add('hidden');
+            _clJobId = null;
+        }
+
+        function generateCoverLetter() {
+            if (!_clJobId) return;
+            const btn = document.getElementById('cl-generate-btn');
+            const output = document.getElementById('cl-output');
+            const errorEl = document.getElementById('cl-error');
+            const copyBtn = document.getElementById('cl-copy-btn');
+            const tone = document.getElementById('cl-tone').value;
+
+            btn.disabled = true;
+            btn.textContent = 'Generating...';
+            output.value = '';
+            errorEl.classList.add('hidden');
+            copyBtn.classList.add('hidden');
+
+            const formData = new FormData();
+            formData.append('tone', tone);
+
+            fetch('/jobs/' + _clJobId + '/cover-letter', {
+                method: 'POST',
+                body: formData
+            })
+            .then(r => r.json())
+            .then(data => {
+                btn.disabled = false;
+                btn.textContent = 'Generate';
+                if (data.ok) {
+                    output.value = data.cover_letter;
+                    copyBtn.classList.remove('hidden');
+                } else {
+                    errorEl.textContent = data.error || 'Something went wrong.';
+                    errorEl.classList.remove('hidden');
+                }
+            })
+            .catch(() => {
+                btn.disabled = false;
+                btn.textContent = 'Generate';
+                errorEl.textContent = 'Network error. Please try again.';
+                errorEl.classList.remove('hidden');
+            });
+        }
+
+        function copyCoverLetter() {
+            const output = document.getElementById('cl-output');
+            const copyBtn = document.getElementById('cl-copy-btn');
+            navigator.clipboard.writeText(output.value).then(() => {
+                const orig = copyBtn.textContent;
+                copyBtn.textContent = 'Copied!';
+                setTimeout(() => { copyBtn.textContent = orig; }, 2000);
+            });
+        }
+    </script>
+
     {% block scripts %}{% endblock %}
 </body>
 </html>

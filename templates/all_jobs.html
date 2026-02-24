@@ -65,6 +65,10 @@
                 </td>
                 <td class="px-4 py-2.5 text-sm">
                     <div class="flex gap-1">
+                        <button onclick='openCoverLetterModal({{ job.id }}, {{ job.title|tojson }}, {{ job.company|tojson }})'
+                                class="px-2 py-0.5 text-xs rounded bg-purple-50 text-purple-700 hover:bg-purple-100">
+                            CL
+                        </button>
                         {% if not job.dismissed %}
                         <button onclick="jobAction('/jobs/{{ job.id }}/dismiss', this)"
                                 class="px-2 py-0.5 text-xs rounded bg-gray-50 text-gray-500 hover:bg-red-50 hover:text-red-600">

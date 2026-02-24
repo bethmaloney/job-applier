@@ -5,6 +5,7 @@ import threading
 from flask import Flask, render_template, request, redirect, url_for, flash, jsonify
 
 import config
+import cover_letter
 import database
 import scraper
 import ranker
@@ -108,6 +109,31 @@ def mark_job_applied(job_id):
         return jsonify({"ok": True})
     flash("Marked as applied!", "success")
     return redirect(request.referrer or url_for("dashboard"))
+
+
+@app.route("/jobs/<int:job_id>/cover-letter", methods=["POST"])
+def generate_cover_letter(job_id):
+    conn = database.get_db()
+    job = database.get_job_by_id(conn, job_id)
+    if not job:
+        conn.close()
+        return jsonify({"ok": False, "error": "Job not found."}), 404
+
+    if not job.get("description"):
+        conn.close()
+        return jsonify({"ok": False, "error": "This job has no description. Try refreshing job details first."}), 400
+
+    profile = database.get_profile(conn)
+    conn.close()
+    if not profile:
+        return jsonify({"ok": False, "error": "No profile set. Go to Settings and fill in your profile first."}), 400
+
+    tone = request.form.get("tone", "professional")
+    text = cover_letter.generate(job, profile, tone=tone)
+    if not text:
+        return jsonify({"ok": False, "error": "Failed to generate cover letter. Check logs for details."}), 500
+
+    return jsonify({"ok": True, "cover_letter": text})
 
 
 def _run_fetch():

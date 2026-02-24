@@ -97,6 +97,18 @@ def insert_job(conn, source, external_id, title, company, location,
         return None
 
 
+def get_job_by_id(conn, job_id):
+    """Fetch a single job by ID with status joined."""
+    row = conn.execute("""
+        SELECT j.*, js.relevance_score, js.relevance_explanation,
+               js.seen, js.dismissed, js.applied
+        FROM jobs j
+        JOIN job_status js ON j.id = js.job_id
+        WHERE j.id = ?
+    """, (job_id,)).fetchone()
+    return dict(row) if row else None
+
+
 def get_new_jobs(conn, source_filter=None, sort_by="relevance"):
     """Get unseen, non-dismissed jobs."""
     query = """
