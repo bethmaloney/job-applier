@@ -59,6 +59,15 @@ def init_db():
             new_jobs INTEGER NOT NULL DEFAULT 0,
             errors TEXT
         );
+
+        CREATE TABLE IF NOT EXISTS search_configs (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            source TEXT NOT NULL,
+            keywords TEXT NOT NULL,
+            location TEXT NOT NULL,
+            enabled INTEGER NOT NULL DEFAULT 1,
+            created_at TEXT NOT NULL DEFAULT (datetime('now'))
+        );
     """)
     # Migrations for existing databases
     cols = [r[1] for r in conn.execute("PRAGMA table_info(user_profile)").fetchall()]
@@ -69,11 +78,38 @@ def init_db():
         conn.execute("ALTER TABLE user_profile ADD COLUMN cover_letter_instructions TEXT")
         conn.commit()
 
+    # Seed search_configs from config.py defaults if the table is empty
+    count = conn.execute("SELECT COUNT(*) FROM search_configs").fetchone()[0]
+    if count == 0:
+        for url in config.SEEK_SEARCH_URLS:
+            keywords, location = config.parse_seek_url(url)
+            if keywords and location:
+                conn.execute(
+                    "INSERT INTO search_configs (source, keywords, location) VALUES (?, ?, ?)",
+                    ("seek", keywords, location),
+                )
+        for search in config.LINKEDIN_SEARCHES:
+            conn.execute(
+                "INSERT INTO search_configs (source, keywords, location) VALUES (?, ?, ?)",
+                ("linkedin", search["keywords"], search["location"]),
+            )
+        conn.commit()
+
     # Clean up Seek salary placeholders stored in earlier scrapes
     conn.execute(
         "UPDATE jobs SET salary = '' WHERE lower(salary) LIKE 'add expected salary%'"
     )
     conn.commit()
+
+    # Normalize existing job locations to "City, STATE, Australia" format
+    from scraper import normalize_location
+    rows = conn.execute("SELECT id, location FROM jobs WHERE location IS NOT NULL AND location != ''").fetchall()
+    for row in rows:
+        normalized = normalize_location(row["location"])
+        if normalized != row["location"]:
+            conn.execute("UPDATE jobs SET location = ? WHERE id = ?", (normalized, row["id"]))
+    conn.commit()
+
     conn.close()
 
 
@@ -309,3 +345,35 @@ def get_fetch_logs(conn, limit=20):
     return conn.execute(
         "SELECT * FROM fetch_log ORDER BY timestamp DESC LIMIT ?", (limit,)
     ).fetchall()
+
+
+# --- Search configs ---
+
+def get_search_configs(conn, source=None):
+    if source:
+        return conn.execute(
+            "SELECT * FROM search_configs WHERE source = ? ORDER BY id",
+            (source,),
+        ).fetchall()
+    return conn.execute("SELECT * FROM search_configs ORDER BY source, id").fetchall()
+
+
+def add_search_config(conn, source, keywords, location):
+    conn.execute(
+        "INSERT INTO search_configs (source, keywords, location) VALUES (?, ?, ?)",
+        (source, keywords, location),
+    )
+    conn.commit()
+
+
+def delete_search_config(conn, config_id):
+    conn.execute("DELETE FROM search_configs WHERE id = ?", (config_id,))
+    conn.commit()
+
+
+def toggle_search_config(conn, config_id):
+    conn.execute(
+        "UPDATE search_configs SET enabled = CASE WHEN enabled = 1 THEN 0 ELSE 1 END WHERE id = ?",
+        (config_id,),
+    )
+    conn.commit()

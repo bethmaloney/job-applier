@@ -73,6 +73,73 @@
         </div>
     </form>
 
+    <!-- Job searches -->
+    <div class="bg-white rounded-lg shadow-sm border p-6 mb-8">
+        <h2 class="text-lg font-medium text-gray-800 mb-4">Job Searches</h2>
+        <p class="text-sm text-gray-500 mb-4">Configure which searches to run when fetching jobs.</p>
+
+        {% if search_configs %}
+        <div class="overflow-x-auto mb-4">
+            <table class="min-w-full divide-y divide-gray-200 text-sm">
+                <thead class="bg-gray-50">
+                    <tr>
+                        <th class="px-3 py-2 text-left text-xs font-medium text-gray-500 uppercase">Source</th>
+                        <th class="px-3 py-2 text-left text-xs font-medium text-gray-500 uppercase">Keywords</th>
+                        <th class="px-3 py-2 text-left text-xs font-medium text-gray-500 uppercase">Location</th>
+                        <th class="px-3 py-2 text-right text-xs font-medium text-gray-500 uppercase">Actions</th>
+                    </tr>
+                </thead>
+                <tbody class="divide-y divide-gray-100">
+                    {% for sc in search_configs %}
+                    <tr>
+                        <td class="px-3 py-2">
+                            <span class="px-1.5 py-0.5 rounded text-xs {{ 'bg-orange-50 text-orange-700' if sc.source == 'seek' else 'bg-blue-50 text-blue-700' }}">
+                                {{ sc.source }}
+                            </span>
+                        </td>
+                        <td class="px-3 py-2 text-gray-700">{{ sc.keywords }}</td>
+                        <td class="px-3 py-2 text-gray-700">{{ sc.location }}</td>
+                        <td class="px-3 py-2 text-right">
+                            <form method="POST" action="{{ url_for('delete_search', config_id=sc.id) }}" class="inline">
+                                <button type="submit" class="text-red-500 hover:text-red-700 text-xs font-medium"
+                                        onclick="return confirm('Remove this search?')">Delete</button>
+                            </form>
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+        {% else %}
+        <p class="text-sm text-gray-400 mb-4">No searches configured.</p>
+        {% endif %}
+
+        <form method="POST" action="{{ url_for('add_search') }}" class="flex flex-wrap items-end gap-3 pt-3 border-t">
+            <div>
+                <label for="source" class="block text-xs font-medium text-gray-600 mb-1">Source</label>
+                <select id="source" name="source"
+                        class="rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 text-sm px-3 py-2 border">
+                    <option value="seek">Seek</option>
+                    <option value="linkedin">LinkedIn</option>
+                </select>
+            </div>
+            <div class="flex-1 min-w-[150px]">
+                <label for="keywords" class="block text-xs font-medium text-gray-600 mb-1">Keywords</label>
+                <input type="text" id="keywords" name="keywords" required placeholder="e.g. software engineer"
+                       class="w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 text-sm px-3 py-2 border">
+            </div>
+            <div class="flex-1 min-w-[150px]">
+                <label for="search_location" class="block text-xs font-medium text-gray-600 mb-1">Location</label>
+                <input type="text" id="search_location" name="location" required placeholder="e.g. Melbourne VIC"
+                       class="w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 text-sm px-3 py-2 border">
+            </div>
+            <button type="submit"
+                    class="px-4 py-2 text-sm font-medium rounded-md text-white bg-indigo-600 hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-indigo-500">
+                Add Search
+            </button>
+        </form>
+    </div>
+
     <!-- Fetch logs -->
     <div class="bg-white rounded-lg shadow-sm border p-6">
         <h2 class="text-lg font-medium text-gray-800 mb-4">Fetch History</h2>

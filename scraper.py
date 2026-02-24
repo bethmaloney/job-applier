@@ -14,6 +14,54 @@ import database
 
 logger = logging.getLogger(__name__)
 
+_STATE_ABBREV = {
+    "new south wales": "NSW",
+    "victoria": "VIC",
+    "queensland": "QLD",
+    "south australia": "SA",
+    "western australia": "WA",
+    "tasmania": "TAS",
+    "northern territory": "NT",
+    "australian capital territory": "ACT",
+}
+
+_VALID_ABBREVS = set(_STATE_ABBREV.values())
+
+
+def normalize_location(location):
+    """Normalize Australian job locations to 'City, STATE, Australia' format.
+
+    Handles:
+      - Seek-style:     "Melbourne VIC" → "Melbourne, VIC, Australia"
+      - LinkedIn-style: "Melbourne, Victoria, Australia" → "Melbourne, VIC, Australia"
+      - Already normalised strings are returned as-is.
+      - Unrecognised formats are passed through unchanged.
+    """
+    if not location or not location.strip():
+        return location
+
+    location = location.strip()
+
+    # LinkedIn-style: "City, State, Australia"
+    parts = [p.strip() for p in location.split(",")]
+    if len(parts) >= 2:
+        state_part = parts[-1] if parts[-1].lower() != "australia" else (parts[-2] if len(parts) >= 3 else "")
+        city = parts[0]
+        abbrev = _STATE_ABBREV.get(state_part.lower()) or (state_part.upper() if state_part.upper() in _VALID_ABBREVS else "")
+        if city and abbrev:
+            return f"{city}, {abbrev}, Australia"
+        return location
+
+    # Seek-style: "Melbourne VIC"
+    words = location.rsplit(None, 1)
+    if len(words) == 2:
+        city, maybe_state = words
+        if maybe_state.upper() in _VALID_ABBREVS:
+            return f"{city}, {maybe_state.upper()}, Australia"
+
+    return location
+
+
 SESSION_HEADERS = {
     "User-Agent": config.USER_AGENT,
     "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
@@ -104,6 +152,8 @@ def _normalize_seek_json_job(data):
         elif isinstance(loc_data, list) and loc_data:
             location = loc_data[0].get("label", "") if isinstance(loc_data[0], dict) else str(loc_data[0])
 
+        location = normalize_location(location)
+
         salary = data.get("salary", "") or data.get("salaryLabel", "") or ""
         if isinstance(salary, dict):
             salary = salary.get("label", "")
@@ -174,6 +224,7 @@ def _parse_seek_html(soup):
                 or card.select_one('[data-testid="job-location"]')
             )
             location = location_el.get_text(strip=True) if location_el else ""
+            location = normalize_location(location)
 
             salary_el = card.select_one('[data-automation*="salary"]') or card.select_one('[data-testid="job-salary"]')
             salary = salary_el.get_text(strip=True) if salary_el else ""
@@ -314,13 +365,29 @@ def _find_description_in_data(data, depth=0):
     return ""
 
 
+def _get_seek_urls():
+    """Build Seek search URLs from DB configs, falling back to config.py."""
+    conn = database.get_db()
+    configs = database.get_search_configs(conn, source="seek")
+    conn.close()
+    configs = [c for c in configs if c["enabled"]]
+    if configs:
+        urls = []
+        for c in configs:
+            kw = c["keywords"].strip().replace(" ", "-")
+            loc = c["location"].strip().replace(" ", "-")
+            urls.append(f"https://www.seek.com.au/{kw}-jobs/in-{loc}?daterange=7")
+        return urls
+    return config.SEEK_SEARCH_URLS
+
+
 def scrape_seek(on_progress=None):
     """Scrape all configured Seek search URLs."""
     all_jobs = []
     errors = []
     session = cffi_requests.Session(impersonate="chrome")
 
-    for url in config.SEEK_SEARCH_URLS:
+    for url in _get_seek_urls():
         try:
             logger.info(f"Fetching Seek: {url}")
             resp = _seek_get(url, session)
@@ -435,6 +502,7 @@ def _parse_linkedin_cards(html):
 
             location_el = base.find("span", class_=re.compile("job-search-card__location"))
             location = location_el.get_text(strip=True) if location_el else ""
+            location = normalize_location(location)
 
             date_el = base.find("time")
             posted = date_el.get("datetime", "") if date_el else ""
@@ -491,13 +559,24 @@ def _fetch_linkedin_detail(job_url, session):
     return description, salary
 
 
+def _get_linkedin_searches():
+    """Get LinkedIn search configs from DB, falling back to config.py."""
+    conn = database.get_db()
+    configs = database.get_search_configs(conn, source="linkedin")
+    conn.close()
+    configs = [c for c in configs if c["enabled"]]
+    if configs:
+        return [{"keywords": c["keywords"], "location": c["location"]} for c in configs]
+    return config.LINKEDIN_SEARCHES
+
+
 def scrape_linkedin(on_progress=None):
     """Scrape LinkedIn guest job search API."""
     all_jobs = []
     errors = []
     session = requests.Session()
 
-    for search in config.LINKEDIN_SEARCHES:
+    for search in _get_linkedin_searches():
         keywords = search["keywords"]
         location = search["location"]
 

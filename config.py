@@ -31,6 +31,22 @@ LINKEDIN_SEARCHES = [
     {"keywords": "software developer", "location": "Melbourne, Victoria, Australia"},
 ]
 
+
+def parse_seek_url(url):
+    """Parse a Seek search URL into (keywords, location) tuple.
+
+    E.g. 'https://www.seek.com.au/software-engineer-jobs/in-Melbourne-VIC?daterange=7'
+    -> ('software engineer', 'Melbourne VIC')
+    """
+    import re
+    m = re.search(r'seek\.com\.au/(.+)-jobs/in-([^?]+)', url)
+    if not m:
+        return None, None
+    keywords = m.group(1).replace('-', ' ')
+    location = m.group(2).replace('-', ' ')
+    return keywords, location
+
+
 # Claude CLI ranking
 CLAUDE_CLI_PATH = "claude"  # assumes claude is on PATH
 CLAUDE_MODEL = "sonnet"

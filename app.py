@@ -260,8 +260,33 @@ def settings():
 
     profile = database.get_profile(conn)
     logs = database.get_fetch_logs(conn)
+    search_configs = database.get_search_configs(conn)
     conn.close()
-    return render_template("settings.html", profile=profile, logs=logs)
+    return render_template("settings.html", profile=profile, logs=logs, search_configs=search_configs)
+
+
+@app.route("/settings/searches", methods=["POST"])
+def add_search():
+    source = request.form.get("source", "").strip()
+    keywords = request.form.get("keywords", "").strip()
+    location = request.form.get("location", "").strip()
+    if source not in ("seek", "linkedin") or not keywords or not location:
+        flash("Please fill in all fields.", "warning")
+        return redirect(url_for("settings"))
+    conn = database.get_db()
+    database.add_search_config(conn, source, keywords, location)
+    conn.close()
+    flash(f"Added {source} search: {keywords} in {location}", "success")
+    return redirect(url_for("settings"))
+
+
+@app.route("/settings/searches/<int:config_id>/delete", methods=["POST"])
+def delete_search(config_id):
+    conn = database.get_db()
+    database.delete_search_config(conn, config_id)
+    conn.close()
+    flash("Search removed.", "success")
+    return redirect(url_for("settings"))
 
 
 if __name__ == "__main__":
