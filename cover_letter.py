@@ -6,12 +6,14 @@ import config
 
 logger = logging.getLogger(__name__)
 
-TONE_MAP = {
-    "professional": "formal and professional, confident but not arrogant",
-    "friendly": "warm and personable, conversational yet polished",
-    "enthusiastic": "energetic and passionate, showing genuine excitement",
-    "concise": "direct and to-the-point, no fluff, every sentence earns its place",
-}
+DEFAULT_COVER_LETTER_INSTRUCTIONS = (
+    "Write like a real engineer, not a marketing brochure. "
+    "Direct and confident but not robotic — normal human warmth is fine. "
+    "Avoid over-the-top enthusiasm like 'genuinely excited', 'passionate about', "
+    "'thrilled by the opportunity', 'resonates with me', 'incredible opportunity'. "
+    "Saying you're drawn to something or excited about something specific is fine — "
+    "just don't lay it on thick."
+)
 
 COVER_LETTER_PROMPT_TEMPLATE = """\
 Write a cover letter body for the following job application.
@@ -31,13 +33,15 @@ Write a cover letter body for the following job application.
 - **Description**: {description}
 
 ## Instructions
-- Write 3-4 paragraphs, under 300 words
-- Tone: {tone_description}
+- Write 3-4 paragraphs, under 300 words total
 - Do NOT include any header, address block, date, "Dear Hiring Manager", or sign-off — just the body paragraphs
 - Write in first person
-- Highlight 2-3 skills or experiences from the candidate profile that match the job requirements
-- Be specific about why this role and company are a good fit
+- Read the job description carefully and call out specifics from it — mention their tech stack, specific challenges they describe, team structure, compliance goals, or anything that shows you actually read the ad rather than sending a generic letter
+- Match 2-3 candidate experiences to specific job requirements. Go deep on the overlap rather than listing everything.
+- Vary paragraph structure — don't start every paragraph with "I" or follow the same pattern
+- Prefer short, direct sentences. Cut filler words and corporate fluff.
 - Output ONLY the cover letter text, no commentary or labels
+- Tone and style: {instructions}
 """
 
 
@@ -46,7 +50,7 @@ def _call_claude(prompt, timeout=60):
     try:
         env = {k: v for k, v in os.environ.items() if k != "CLAUDECODE"}
         result = subprocess.run(
-            [config.CLAUDE_CLI_PATH, "-p", "--model", config.CLAUDE_MODEL],
+            [config.CLAUDE_CLI_PATH, "-p", "--model", config.CLAUDE_COVER_LETTER_MODEL],
             input=prompt,
             capture_output=True,
             text=True,
@@ -69,9 +73,11 @@ def _call_claude(prompt, timeout=60):
         return None
 
 
-def generate(job, profile, tone="professional"):
+def generate(job, profile):
     """Generate a cover letter for a job using the candidate profile."""
-    tone_description = TONE_MAP.get(tone, TONE_MAP["professional"])
+    instructions = (
+        profile.get("cover_letter_instructions") or DEFAULT_COVER_LETTER_INSTRUCTIONS
+    )
 
     prompt = COVER_LETTER_PROMPT_TEMPLATE.format(
         skills=profile.get("skills") or "Not specified",
@@ -84,7 +90,7 @@ def generate(job, profile, tone="professional"):
         location=job["location"] or "Unknown",
         salary=job["salary"] or "Not listed",
         description=job["description"] or "No description available",
-        tone_description=tone_description,
+        instructions=instructions,
     )
 
     return _call_claude(prompt)

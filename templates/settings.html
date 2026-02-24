@@ -50,6 +50,14 @@
             </div>
 
             <div>
+                <label for="cover_letter_instructions" class="block text-sm font-medium text-gray-700 mb-1">Cover Letter Instructions</label>
+                <textarea id="cover_letter_instructions" name="cover_letter_instructions" rows="3"
+                          placeholder="e.g. Professional, confident, accomplishment-focused. Emphasize measurable outcomes and technical leadership."
+                          class="w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 text-sm px-3 py-2 border">{{ profile.cover_letter_instructions if profile and profile.cover_letter_instructions else '' }}</textarea>
+                <p class="mt-1 text-xs text-gray-400">Tone and style guidance passed to Claude when generating cover letters. Leave blank for the default.</p>
+            </div>
+
+            <div>
                 <label for="resume_text" class="block text-sm font-medium text-gray-700 mb-1">Resume / Experience Summary</label>
                 <textarea id="resume_text" name="resume_text" rows="6"
                           placeholder="Paste a summary of your experience, or your full resume text..."

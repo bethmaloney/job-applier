@@ -34,3 +34,4 @@ LINKEDIN_SEARCHES = [
 # Claude CLI ranking
 CLAUDE_CLI_PATH = "claude"  # assumes claude is on PATH
 CLAUDE_MODEL = "sonnet"
+CLAUDE_COVER_LETTER_MODEL = "opus"

@@ -246,14 +246,7 @@
                     <button onclick="closeCoverLetterModal()" class="text-gray-400 hover:text-gray-600 text-xl leading-none">&times;</button>
                 </div>
 
-                <div class="flex items-center gap-3 mb-4">
-                    <label for="cl-tone" class="text-sm font-medium text-gray-700">Tone:</label>
-                    <select id="cl-tone" class="rounded-md border-gray-300 shadow-sm text-sm px-3 py-1.5 border focus:ring-indigo-500 focus:border-indigo-500">
-                        <option value="professional">Professional</option>
-                        <option value="friendly">Friendly</option>
-                        <option value="enthusiastic">Enthusiastic</option>
-                        <option value="concise">Concise</option>
-                    </select>
+                <div class="mb-4">
                     <button id="cl-generate-btn" onclick="generateCoverLetter()"
                             class="px-4 py-1.5 text-sm font-medium rounded-md text-white bg-indigo-600 hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-indigo-500">
                         Generate
@@ -292,7 +285,6 @@
             document.getElementById('cl-copy-btn').classList.add('hidden');
             document.getElementById('cl-generate-btn').disabled = false;
             document.getElementById('cl-generate-btn').textContent = 'Generate';
-            document.getElementById('cl-tone').value = 'professional';
             document.getElementById('cl-modal').classList.remove('hidden');
         }
 
@@ -307,7 +299,6 @@
             const output = document.getElementById('cl-output');
             const errorEl = document.getElementById('cl-error');
             const copyBtn = document.getElementById('cl-copy-btn');
-            const tone = document.getElementById('cl-tone').value;
 
             btn.disabled = true;
             btn.textContent = 'Generating...';
@@ -315,12 +306,9 @@
             errorEl.classList.add('hidden');
             copyBtn.classList.add('hidden');
 
-            const formData = new FormData();
-            formData.append('tone', tone);
-
             fetch('/jobs/' + _clJobId + '/cover-letter', {
                 method: 'POST',
-                body: formData
+                headers: {'X-Requested-With': 'XMLHttpRequest'}
             })
             .then(r => r.json())
             .then(data => {

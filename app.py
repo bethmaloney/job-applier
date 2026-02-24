@@ -128,8 +128,7 @@ def generate_cover_letter(job_id):
     if not profile:
         return jsonify({"ok": False, "error": "No profile set. Go to Settings and fill in your profile first."}), 400
 
-    tone = request.form.get("tone", "professional")
-    text = cover_letter.generate(job, profile, tone=tone)
+    text = cover_letter.generate(job, profile)
     if not text:
         return jsonify({"ok": False, "error": "Failed to generate cover letter. Check logs for details."}), 500
 
@@ -253,6 +252,7 @@ def settings():
             target_titles=request.form.get("target_titles", ""),
             min_salary=request.form.get("min_salary", type=int),
             location=request.form.get("location", ""),
+            cover_letter_instructions=request.form.get("cover_letter_instructions", ""),
         )
         flash("Profile saved!", "success")
         conn.close()

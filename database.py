@@ -65,6 +65,9 @@ def init_db():
     if "location" not in cols:
         conn.execute("ALTER TABLE user_profile ADD COLUMN location TEXT")
         conn.commit()
+    if "cover_letter_instructions" not in cols:
+        conn.execute("ALTER TABLE user_profile ADD COLUMN cover_letter_instructions TEXT")
+        conn.commit()
 
     # Clean up Seek salary placeholders stored in earlier scrapes
     conn.execute(
@@ -273,10 +276,11 @@ def get_profile(conn):
     return dict(row) if row else None
 
 
-def save_profile(conn, skills, preferences, resume_text, target_titles, min_salary, location):
+def save_profile(conn, skills, preferences, resume_text, target_titles, min_salary, location,
+                  cover_letter_instructions):
     conn.execute(
-        """INSERT INTO user_profile (id, skills, preferences, resume_text, target_titles, min_salary, location, updated_at)
-           VALUES (1, ?, ?, ?, ?, ?, ?, datetime('now'))
+        """INSERT INTO user_profile (id, skills, preferences, resume_text, target_titles, min_salary, location, cover_letter_instructions, updated_at)
+           VALUES (1, ?, ?, ?, ?, ?, ?, ?, datetime('now'))
            ON CONFLICT(id) DO UPDATE SET
                skills = excluded.skills,
                preferences = excluded.preferences,
@@ -284,8 +288,9 @@ def save_profile(conn, skills, preferences, resume_text, target_titles, min_sala
                target_titles = excluded.target_titles,
                min_salary = excluded.min_salary,
                location = excluded.location,
+               cover_letter_instructions = excluded.cover_letter_instructions,
                updated_at = datetime('now')""",
-        (skills, preferences, resume_text, target_titles, min_salary, location),
+        (skills, preferences, resume_text, target_titles, min_salary, location, cover_letter_instructions),
     )
     conn.commit()
 
