@@ -19,7 +19,17 @@ app.secret_key = config.SECRET_KEY
 
 # Track background fetch status
 _fetch_lock = threading.Lock()
-_fetch_status = {"running": False, "message": ""}
+_fetch_status = {"running": False, "message": "", "current": 0, "total": 0, "stage": ""}
+
+
+def _make_progress(stage):
+    """Return a callback that updates _fetch_status progress for the given stage."""
+    def _on_progress(current, total):
+        _fetch_status["stage"] = stage
+        _fetch_status["current"] = current
+        _fetch_status["total"] = total
+        _fetch_status["message"] = f"{stage} ({current + 1}/{total})"
+    return _on_progress
 
 
 @app.before_request
@@ -100,12 +110,12 @@ def _run_fetch():
     global _fetch_status
     try:
         _fetch_status["message"] = "Scraping jobs..."
-        results = scraper.fetch_all_jobs()
+        results = scraper.fetch_all_jobs(on_progress=_make_progress("Fetching job details"))
 
         total_new = sum(r["new"] for r in results)
         _fetch_status["message"] = f"Found {total_new} new jobs. Ranking..."
 
-        ranked = ranker.rank_new_jobs()
+        ranked = ranker.rank_new_jobs(on_progress=_make_progress("Ranking jobs"))
         _fetch_status["message"] = f"Done! {total_new} new jobs, {ranked} ranked."
     except Exception as e:
         logging.error(f"Fetch error: {e}")
@@ -143,7 +153,7 @@ def rank_jobs():
         try:
             _fetch_status["running"] = True
             _fetch_status["message"] = "Ranking unranked jobs..."
-            ranked = ranker.rank_new_jobs()
+            ranked = ranker.rank_new_jobs(on_progress=_make_progress("Ranking jobs"))
             _fetch_status["message"] = f"Done! {ranked} jobs ranked."
         except Exception as e:
             logging.error(f"Rank error: {e}")
@@ -173,9 +183,9 @@ def refresh_jobs():
     def _run_refresh():
         try:
             _fetch_status["message"] = "Re-fetching job details..."
-            updated, errors = scraper.refresh_job_details()
+            updated, errors = scraper.refresh_job_details(on_progress=_make_progress("Refreshing job details"))
             _fetch_status["message"] = f"Updated {updated} jobs. Ranking..."
-            ranked = ranker.rank_new_jobs()
+            ranked = ranker.rank_new_jobs(on_progress=_make_progress("Ranking jobs"))
             _fetch_status["message"] = f"Done! {updated} descriptions updated, {ranked} jobs ranked."
         except Exception as e:
             logging.error(f"Refresh error: {e}")

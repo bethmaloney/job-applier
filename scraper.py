@@ -314,7 +314,7 @@ def _find_description_in_data(data, depth=0):
     return ""
 
 
-def scrape_seek():
+def scrape_seek(on_progress=None):
     """Scrape all configured Seek search URLs."""
     all_jobs = []
     errors = []
@@ -341,8 +341,11 @@ def scrape_seek():
             errors.append(msg)
 
     # Fetch full detail pages for each job (like LinkedIn scraper does)
-    logger.info(f"Fetching detail pages for {len(all_jobs)} Seek jobs")
-    for job in all_jobs:
+    total = len(all_jobs)
+    logger.info(f"Fetching detail pages for {total} Seek jobs")
+    for i, job in enumerate(all_jobs):
+        if on_progress:
+            on_progress(i, total)
         detail_url = job.get("url")
         if not detail_url:
             continue
@@ -356,7 +359,7 @@ def scrape_seek():
     return all_jobs, errors
 
 
-def refresh_job_details():
+def refresh_job_details(on_progress=None):
     """Re-fetch detail pages for existing Seek and LinkedIn jobs and update descriptions."""
     conn = database.get_db()
     jobs = database.get_jobs_for_refresh(conn)
@@ -365,9 +368,12 @@ def refresh_job_details():
 
     updated = 0
     errors = []
-    logger.info(f"Refreshing details for {len(jobs)} jobs")
+    total = len(jobs)
+    logger.info(f"Refreshing details for {total} jobs")
 
-    for job in jobs:
+    for i, job in enumerate(jobs):
+        if on_progress:
+            on_progress(i, total)
         job = dict(job)
         detail_url = job.get("url")
         if not detail_url:
@@ -485,7 +491,7 @@ def _fetch_linkedin_detail(job_url, session):
     return description, salary
 
 
-def scrape_linkedin():
+def scrape_linkedin(on_progress=None):
     """Scrape LinkedIn guest job search API."""
     all_jobs = []
     errors = []
@@ -524,8 +530,11 @@ def scrape_linkedin():
                 break
 
     # Fetch full detail pages for each job
-    logger.info(f"Fetching detail pages for {len(all_jobs)} LinkedIn jobs")
-    for job in all_jobs:
+    total = len(all_jobs)
+    logger.info(f"Fetching detail pages for {total} LinkedIn jobs")
+    for i, job in enumerate(all_jobs):
+        if on_progress:
+            on_progress(i, total)
         detail_url = job["url"]
         if not detail_url:
             continue
@@ -541,13 +550,13 @@ def scrape_linkedin():
 
 # --- Orchestrator ---
 
-def fetch_all_jobs():
+def fetch_all_jobs(on_progress=None):
     """Run all scrapers and store results in the database."""
     conn = database.get_db()
     results = []
 
     for scrape_fn, source_name in [(scrape_seek, "seek"), (scrape_linkedin, "linkedin")]:
-        jobs, errors = scrape_fn()
+        jobs, errors = scrape_fn(on_progress=on_progress)
 
         new_count = 0
         for job in jobs:

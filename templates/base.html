@@ -53,6 +53,23 @@
         </div>
     </nav>
 
+    <!-- Progress bar for background operations -->
+    <div id="progress-bar" class="hidden">
+        <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+            <div class="flex items-center gap-3 py-2.5">
+                <svg id="progress-spinner" class="animate-spin h-4 w-4 text-indigo-600 shrink-0" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                    <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+                    <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"></path>
+                </svg>
+                <span id="progress-message" class="text-sm text-gray-700 shrink-0"></span>
+                <div class="flex-1 bg-gray-200 rounded-full h-2 overflow-hidden">
+                    <div id="progress-fill" class="h-full rounded-full bg-indigo-600 transition-all duration-300" style="width: 0%"></div>
+                </div>
+                <span id="progress-pct" class="text-sm font-medium text-gray-600 w-10 text-right shrink-0"></span>
+            </div>
+        </div>
+    </div>
+
     <main class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
         {% with messages = get_flashed_messages(with_categories=true) %}
         {% if messages %}
@@ -95,7 +112,6 @@
                 }
             })
             .catch(() => {
-                // Fall back to form submission
                 const form = document.createElement('form');
                 form.method = 'POST';
                 form.action = url;
@@ -103,6 +119,119 @@
                 form.submit();
             });
         }
+
+        // Progress bar polling
+        (function() {
+            const bar = document.getElementById('progress-bar');
+            const fill = document.getElementById('progress-fill');
+            const msg = document.getElementById('progress-message');
+            const pct = document.getElementById('progress-pct');
+            const spinner = document.getElementById('progress-spinner');
+            const actionBtns = document.querySelectorAll('form[action$="/fetch"] button, form[action$="/rank"] button, form[action$="/refresh"] button');
+            let pollTimer = null;
+            let doneTimer = null;
+
+            function setButtons(disabled) {
+                actionBtns.forEach(btn => {
+                    btn.disabled = disabled;
+                    btn.style.opacity = disabled ? '0.5' : '';
+                    btn.style.pointerEvents = disabled ? 'none' : '';
+                });
+            }
+
+            function showDone(message) {
+                fill.style.width = '100%';
+                fill.classList.remove('bg-indigo-600');
+                fill.classList.add('bg-green-500');
+                spinner.classList.add('hidden');
+                msg.textContent = message;
+                pct.textContent = '100%';
+                setButtons(false);
+
+                doneTimer = setTimeout(() => {
+                    bar.classList.add('hidden');
+                    fill.classList.remove('bg-green-500');
+                    fill.classList.add('bg-indigo-600');
+                    fill.style.width = '0%';
+                    pct.textContent = '';
+                    msg.textContent = '';
+                    spinner.classList.remove('hidden');
+                }, 5000);
+            }
+
+            function poll() {
+                fetch('/fetch/status')
+                    .then(r => r.json())
+                    .then(data => {
+                        if (data.running) {
+                            if (doneTimer) { clearTimeout(doneTimer); doneTimer = null; }
+                            bar.classList.remove('hidden');
+                            setButtons(true);
+                            msg.textContent = data.message || 'Working...';
+                            spinner.classList.remove('hidden');
+                            fill.classList.remove('bg-green-500');
+                            fill.classList.add('bg-indigo-600');
+
+                            if (data.total > 0) {
+                                const percent = Math.round(((data.current + 1) / data.total) * 100);
+                                fill.style.width = percent + '%';
+                                pct.textContent = percent + '%';
+                            } else {
+                                // Indeterminate — pulse at 30%
+                                fill.style.width = '30%';
+                                pct.textContent = '';
+                            }
+
+                            pollTimer = setTimeout(poll, 1500);
+                        } else if (data.message && data.message.startsWith('Done')) {
+                            showDone(data.message);
+                            pollTimer = null;
+                        } else if (data.message && data.message.startsWith('Error')) {
+                            bar.classList.remove('hidden');
+                            spinner.classList.add('hidden');
+                            fill.classList.remove('bg-indigo-600');
+                            fill.classList.add('bg-red-500');
+                            fill.style.width = '100%';
+                            msg.textContent = data.message;
+                            pct.textContent = '';
+                            setButtons(false);
+                            doneTimer = setTimeout(() => {
+                                bar.classList.add('hidden');
+                                fill.classList.remove('bg-red-500');
+                                fill.classList.add('bg-indigo-600');
+                                fill.style.width = '0%';
+                            }, 8000);
+                            pollTimer = null;
+                        } else {
+                            bar.classList.add('hidden');
+                            setButtons(false);
+                            pollTimer = null;
+                        }
+                    })
+                    .catch(() => {
+                        pollTimer = setTimeout(poll, 3000);
+                    });
+            }
+
+            // Intercept action form submissions to start polling immediately
+            actionBtns.forEach(btn => {
+                btn.closest('form').addEventListener('submit', () => {
+                    setTimeout(() => {
+                        bar.classList.remove('hidden');
+                        msg.textContent = 'Starting...';
+                        fill.style.width = '0%';
+                        pct.textContent = '';
+                        spinner.classList.remove('hidden');
+                        fill.classList.remove('bg-green-500', 'bg-red-500');
+                        fill.classList.add('bg-indigo-600');
+                        setButtons(true);
+                    }, 100);
+                });
+            });
+
+            // Initial check on page load
+            poll();
+        })();
     </script>
     {% block scripts %}{% endblock %}
 </body>

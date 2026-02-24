@@ -138,7 +138,7 @@ def rank_job(job, profile):
     return _parse_score(response)
 
 
-def rank_new_jobs():
+def rank_new_jobs(on_progress=None):
     """Rank all unranked jobs. Returns count of jobs ranked."""
     conn = database.get_db()
     profile = database.get_profile(conn)
@@ -149,10 +149,13 @@ def rank_new_jobs():
         return 0
 
     unranked = database.get_unranked_jobs(conn)
-    logger.info(f"Ranking {len(unranked)} unranked jobs")
+    total = len(unranked)
+    logger.info(f"Ranking {total} unranked jobs")
 
     ranked_count = 0
-    for job in unranked:
+    for i, job in enumerate(unranked):
+        if on_progress:
+            on_progress(i, total)
         job_dict = dict(job)
         score, explanation = rank_job(job_dict, profile)
 
